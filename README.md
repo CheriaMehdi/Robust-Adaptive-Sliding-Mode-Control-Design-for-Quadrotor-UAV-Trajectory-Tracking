@@ -1,0 +1,2 @@
+# Robust-Adaptive-Sliding-Mode-Control-Design-for-Quadrotor-UAV-Trajectory-Tracking
+In this project, the sliding mode controller has been designed to control the attitude of the quadrotor as the inner loop controller. The major aim in this research is to reduce the chattering associated with the conventional sliding mode control (SMC), by implementing the adaptive fuzzy gain scheduling SMC technique (AFGS-SMC).
