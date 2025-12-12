@@ -244,7 +244,7 @@ PX4, DJI N3, and Betaflight use **outer-loop position → inner-loop attitude �
 
 ## 2.2 Method Flow Diagram
 
-![flowdiagram](scheme.jpg)
+![flowdiagram](scheme.jpeg)
 
 The diagram visually summarizes how information flows between trajectory planning, attitude/position control, and nonlinear dynamics.
 
@@ -728,7 +728,7 @@ The roll, pitch, and yaw angles remain:
 
 Both controllers behave identically because no disturbance is applied, so the system remains well-behaved and balanced.
 
-![attitude_angles_without_disturb](AFGS_SMC\angles attitude.jpg)
+![attitude_angles_without_disturb](3D%20plot%20v1.png)
 
 
 ### **3.1.4 Error Analysis (Nominal Case)**
@@ -762,7 +762,7 @@ The disturbed 3D shape shows clear differences:
 
 **Figure: Disturbed 3D Shape Tracking**  
 
-![3D PLOT](AFGS_SMC\disturbance\3D_shape_disturb.jpg)
+![3D PLOT](3D%20V1.1.png)
 
 ---
 
@@ -772,7 +772,7 @@ The xy-projection highlights the drift more clearly:
 - Classical SMC diverges significantly due to fixed switching gain.  
 - AFGS-SMC adapts its gain instantly → maintains trajectory shape.  
 
-![UP view](8 SHAPE.jpg)
+![UP view](3d%20plot.png)
 
 ---
 
@@ -784,7 +784,7 @@ The attitude plot under disturbance reveals:
 - Adaptive gain scheduling allows rapid compensation without excessive control effort.
 
 
-![Attitude angles](attitude_angles_disturb.jpg)
+![Attitude angles](3D%20V1.2.png)
 ---
 
 # **3.2.4 State RMSE and Instantaneous Error**
@@ -793,7 +793,7 @@ Instantaneous tracking errors strongly differentiate the two controllers:
 - SMC error spikes sharply during disturbance interval.
 - AFGS-SMC shows shallow, short-duration peaks.
 
-![STATE RMSE](state_RMSE_error.jpg)
+![STATE RMSE](3D%20plot%20v1.png)
 ---
 
 # **3.2.5 RMSE and ISE Metrics**
@@ -801,8 +801,8 @@ The bar plots and summary table quantify performance:
 
 **Figure: RMSE / ISE Comparison**  
 
-![comparaison errors](RMSE_comparison_plot.png)
-![comparaison errors](RMSE_ISE.jpg)
+![comparaison errors](3D%20V1.1.png)
+![comparaison errors](3D%20V1.2.png)
 
 ### **Key Observations**
 - AFGS-SMC reduces **steady-state tracking error by more than half**.  
@@ -856,6 +856,7 @@ AFGS-SMC offers:
 Thus, **AFGS-SMC is clearly more suitable for real-world UAV deployment**, where uncertainties and wind disturbances are unavoidable.
 
 ---
+
 
 
 
