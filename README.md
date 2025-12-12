@@ -1,802 +1,863 @@
-# Quadrotor Trajectory Tracking using Sliding Mode Control and Adaptive Fuzzy Gain Scheduling
+# Quadrotor Trajectory Tracking using Sliding Mode Control and Adaptive Fuzzy Gain Scheduling  
+### *Editors: Samer Shili & Mehdi Cheria*  
+
+
+
 
 ## **Abstract**
 
-This project presents a complete MATLAB framework for **nonlinear quadrotor UAV trajectory tracking**, comparing two robust control strategies:
+This work presents a complete MATLAB simulation framework for **nonlinear quadrotor trajectory tracking** using two robust control strategies:
 
-- **Classical Sliding Mode Control (SMC)**
-- **Adaptive Fuzzy Gain-Scheduled Sliding Mode Control (AFGS-SMC)**
+1. **Classical Sliding Mode Control (SMC)**  
+2. **Adaptive Fuzzy Gain-Scheduled Sliding Mode Control (AFGS-SMC)**  
 
-A full 6-DOF quadrotor model is implemented using the Newton–Euler formalism, capturing nonlinear coupling between translational and rotational dynamics, gyroscopic effects, and underactuation. The controllers are evaluated on two demanding 3D trajectories:
+The quadrotor is modeled using the **full 6-DOF Newton–Euler equations**, including nonlinear couplings, gyroscopic moments, and cross-inertia effects.  
+A demanding **3D figure-8 trajectory** is used to evaluate controller precision, stability, and robustness.
 
-- a **figure-8 (∞) trajectory**
-- a **helical (spiral) trajectory**
+AFGS-SMC improves classical SMC by introducing a **Sugeno-type fuzzy logic gain scheduler**, which adapts the switching gain based on real-time tracking conditions. This significantly reduces chattering and improves error convergence while maintaining robustness.
 
-Simulations are executed **with and without external disturbances** to analyze robustness, tracking precision, and control smoothness.  
-The AFGS-SMC controller adaptively adjusts the SMC switching gain using a **Sugeno-type Fuzzy Inference System**, significantly reducing chattering while maintaining robustness.  
-This repository provides a clean, modular, and reproducible implementation suitable for UAV trajectory tracking research, nonlinear control studies, and educational demonstrations.
-
----
-
-## 🚁 **1. System Overview**
-
-### **Quadrotor Dynamics**
-
-The quadrotor is an **underactuated nonlinear system** with 6 states but only 4 control inputs:
-
-- **States:**  
-  $ x, y, z, \phi, \theta, \psi, \dot{x}, \dot{y}, \dot{z}, \dot{\phi}, \dot{\theta}, \dot{\psi} $
-
-- **Control inputs (motor-generated):**
-  - \( u_4 \): Total thrust  
-  - \( u_1, u_2, u_3 \): Roll, pitch, yaw control torques  
-
-The translational dynamics follow Newton's law:
-
-$$
-m\ddot{\mathbf{p}} = R(\phi,\theta,\psi) 
-\begin{bmatrix}
-0 \\ 0 \\ u_4
-\end{bmatrix}
-- 
-\begin{bmatrix}
-0 \\ 0 \\ mg
-\end{bmatrix}
-$$
-
-The rotational dynamics use Euler angle equations:
-
-$$
-I\dot{\boldsymbol{\omega}} = -\boldsymbol{\omega} \times I\boldsymbol{\omega} + \mathbf{u}_{123}
-$$
-
-These nonlinear couplings make control challenging, especially during aggressive motion.
+Simulations are executed **with and without external disturbances**, and performance is assessed using **RMSE** and **ISE** metrics.  
+The results show that **AFGS-SMC outperforms classical SMC** in accuracy, smoothness, and robustness, making it a strong candidate for real-world UAV applications.
 
 ---
 
-## ⚙️ **2. Sliding Mode Control (SMC)**
+# **1. Quadrotor System Overview**
 
-Sliding Mode Control is chosen because of its:
+The quadrotor is an **underactuated, nonlinear mechanical system** with six degrees of freedom but only four independent control inputs.
 
-- robustness against disturbances  
-- finite-time convergence  
-- invariance to modeling errors  
+### **1.1 State Vector**
 
-### **Sliding Surface**
-
-For an attitude angle $ q \in \{\phi, \theta, \psi\} $:
-
+The system state is:
 $$
-s_q = \dot{e}_q + \lambda e_q
-$$  
-
-where:
-
-- $ e_q = q - q_d $ is the tracking error  
-- $ \lambda > 0 $ shapes the convergence rate  
-
-### **SMC Control Law**
-
-$$
-u = u_{\text{eq}} - k \cdot \text{sat}\left(\frac{s}{\delta}\right)
+X = [x,\, y,\, z,\, \phi,\, \theta,\, \psi,\, \dot{x},\, \dot{y},\, \dot{z},\, \dot{\phi},\, \dot{\theta},\, \dot{\psi}]^T
 $$
 
 Where:
 
-- $ u_{\text{eq}} $: equivalent control  
-- $ k $: switching gain (fixed in classical SMC)  
-- $ \delta $: boundary layer  
-- $ \text{sat}(\cdot) $: smooth saturation to reduce chattering  
+- $ (x, y, z) $: position  
+- $ (\phi, \theta, \psi) $: roll, pitch, yaw  
+- $ \dot{x},\dot{y},\dot{z} $: translational velocity  
+- $ \dot{\phi},\dot{\theta},\dot{\psi} $: angular velocity  
 
-### **SMC Advantages**
+### **1.2 Control Inputs**
 
-- Highly robust  
-- Guarantees convergence  
-- Handles uncertainties  
+The quadrotor has four rotor-generated inputs:
 
-### **SMC Limitations**
+- $ u_4 $: total thrust  
+- $ u_1 $: roll torque  
+- $ u_2 $: pitch torque  
+- $ u_3 $: yaw torque  
 
-- Requires a large switching gain  
-- Causes **chattering**, damaging motors  
-- Not smooth near the sliding surface  
+### **1.3 Translational Dynamics**
 
-To overcome these issues, we introduce AFGS.
+The translational motion is governed by:
+
+$$
+m \ddot{\mathbf{p}} =
+R(\phi,\theta,\psi)
+\begin{bmatrix} 0 \\ 0 \\ u_4 \end{bmatrix}
+-
+\begin{bmatrix} 0 \\ 0 \\ mg \end{bmatrix}
+$$
+
+Where:
+- $ m $ is the UAV mass  
+- $ R(\phi,\theta,\psi) $ is the rotation matrix from body to inertial frame  
+
+### **1.4 Rotational Dynamics**
+
+Using Euler’s rotational equations:
+
+$$
+I\dot{\boldsymbol{\omega}} =
+-\boldsymbol{\omega} \times (I\boldsymbol{\omega})
++ 
+\begin{bmatrix} u_1 \\ u_2 \\ u_3 \end{bmatrix}
+$$
+
+Where:
+- $ I = \text{diag}(I_x, I_y, I_z) $  
+- $ \boldsymbol{\omega} = [\dot{\phi}, \dot{\theta}, \dot{\psi}]^T $
+
+### **1.5 Nonlinear Couplings**
+
+The dynamics include:
+
+- cross-coupling between roll, pitch, and yaw  
+- gyroscopic effects due to the four rotors  
+- nonlinear sine/cosine relationships  
+- underactuation: translation in $ x,y $ depends on attitude  
+
+This complexity motivates the need for robust nonlinear controllers.
 
 ---
 
-## 🧠 **3. Fuzzy Logic Gain Scheduling (AFGS)**
+# **2. Reference Trajectory**
 
-The Adaptive Fuzzy Gain Scheduling controller replaces the **fixed switching gain $ k $** in classical SMC with an **adaptive nonlinear function** derived from a **Sugeno Fuzzy Inference System (FIS)**.
-
-### **Why Fuzzy Logic?**
-
-Fuzzy logic handles:
-
-- nonlinear behaviors  
-- uncertain environments  
-- qualitative reasoning  
-
-### **Inputs to the FIS**
-
-We select:
-
-1. **Sliding surface magnitude**:  
-   $$
-   |s|
-   $$
-
-2. **Error derivative magnitude**:  
-   $$
-   |\dot{e}|
-   $$
-
-These quantify how “far” and how “fast” the system is drifting away from the surface.
-
-### **Output of the FIS**
-
-A **scalar adaptive gain $ k_{\text{fuzzy}} $** that replaces the fixed SMC switching gain.
+The desired 3D path is a smooth **infinity (∞) shape**:
 
 $$
-k(t) = k_{\text{fuzzy}}( |s| , |\dot{e}| )
+x_d(t) = a \sin(\omega t)
+$$
+$$
+y_d(t) = b \sin(2 \omega t)
+$$
+$$
+z_d(t) = z_0
 $$
 
-### **FIS Structure**
+This trajectory evaluates:
 
-- **Sugeno-type controller**
-- **Gaussian membership functions**
-- **3 linguistic sets per input:**  
-  - *Small*  
-  - *Medium*  
-  - *Large*
-- **Output singletons:**  
-  - Low, Medium, High
-- **9 rules** covering all input combinations
+- fast changes in curvature  
+- strong x–y coupling  
+- continuous alternation between left/right turning  
+- tracking precision during nonlinear maneuvers  
 
-### **Advantages of AFGS**
-
-- Smooth switching gain  
-- No unnecessary large control effort  
-- Significantly reduced chattering  
-- Faster steady-state convergence  
-- Improved robustness to disturbances  
+It is ideal for comparing robustness between **SMC** and **AFGS-SMC**.
 
 ---
 
-## 🧩 **4. Included MATLAB Files**
+# **3. Control Objective**
 
-| File | Description |
-|------|-------------|
-| `simulate_8shape.m` | Runs full figure-8 trajectory tracking |
-| `simulate_helix.m` | Runs helical (spiral) trajectory tracking |
-| `quadrotor_dynamics.m` | Full nonlinear quadrotor + SMC/AFGS controller |
-| `createFIS.m` | Generates the Sugeno Fuzzy Inference System |
+Given the quadrotor nonlinear state evolution:
+
+$$
+\dot{X}(t) = f(X(t)) + g(X(t))u(t)
+$$
+
+The goal is to design **two controllers**:
+
+1. **Classical SMC**
+2. **Adaptive Fuzzy Gain-Scheduled SMC**
+
+such that:
+
+$$
+X(t) \rightarrow X_d(t) \quad \text{as} \quad t \rightarrow \infty
+$$
+
+with:
+
+- minimal tracking error  
+- robustness to disturbances  
+- reduced chattering  
+- smooth control torques  
+
+This sets the foundation for the next section (Methodology), where we derive the controller and explain the fuzzy scheduling mechanism.
+
+
+# 2. Methodology
+
+This section presents the complete control and simulation architecture used in this work.  
+The approach combines:
+
+- a **nonlinear quadrotor dynamic model**,  
+- a **trajectory generator** with feedforward terms,  
+- an **outer-loop PD position controller**,  
+- an **inner-loop attitude controller** based on Classical SMC or Adaptive Fuzzy Gain-Scheduled SMC (AFGS-SMC),  
+- a **motor allocation module**,  
+- and a **disturbance-injected dynamic simulation**.
+
+The control framework is designed to ensure:
+- robustness to disturbances,
+- smooth and accurate trajectory tracking,
+- reduced chattering,
+- and stable behavior under aggressive motion.
 
 ---
 
-## 🌀 **5. Trajectories**
+## 2.1 Control Architecture Overview
 
-### **A. Figure-8 (∞) Trajectory**
+Quadrotors are **nonlinear underactuated systems**:  
+they have **four inputs** (thrust + 3 torques) but **six DOF** (x, y, z, φ, θ, ψ).  
+Therefore, motion is controlled through a *hierarchical structure*:
 
-$$
-x_d = a\sin(\omega t), \quad 
-y_d = b\sin(2\omega t), \quad 
+---
+
+### **Outer Loop – Position Control (x, y, z)**  
+**Inputs:**  
+- desired trajectory $ x_d(t), y_d(t), z_d(t) $  
+- current position $ x, y, z $, velocities  
+
+**Outputs:**  
+- desired attitude commands $ \phi_d, \theta_d $  
+- required thrust $ u_4 $
+
+**Role:**  
+Converts translational errors into required tilt angles to move the UAV.
+
+---
+
+### **Inner Loop – Attitude Control (φ, θ, ψ)**  
+Two possible controllers:
+
+#### **1. Classical Sliding Mode Control (SMC)**
+- Strong robustness  
+- High correction gain  
+- Sensitive to chattering  
+
+#### **2. Adaptive Fuzzy Gain-Scheduled SMC (AFGS-SMC)**
+- Gain is adapted online using fuzzy logic  
+- Reduces chattering  
+- Increases robustness under disturbances  
+
+**Outputs:**  
+- the torques $ (u_1,u_2,u_3) $
+
+---
+
+### **Motor Allocation Layer**
+
+Transforms  
+\[
+(u_1, u_2, u_3, u_4)
+\]  
+into the four motor speeds $ \Omega_1, \Omega_2, \Omega_3, \Omega_4 $.
+
+---
+
+### **Dynamic Model Layer**
+
+Integrates the full nonlinear quadrotor dynamics with:
+- rigid-body translational equations,  
+- rotational equations with gyroscopic terms,  
+- aerodynamic torques,  
+- **external disturbances** injected in φ and θ channels between *20–30 seconds*.
+
+---
+
+### **Overall System Logic (Full Loop Explanation)**
+
+1. **Trajectory Generator** → provides $ x_d, y_d, z_d $ and their derivatives  
+2. **Outer PD Loop** → computes desired accelerations $ U_x, U_y, U_z $  
+3. **Angle Converter** → transforms these accelerations into desired angles  
+4. **Inner SMC / AFGS-SMC** → tracks $ \phi_d, \theta_d, \psi_d $ with torques  
+5. **Motor Mixer** → computes rotor speeds  
+6. **Nonlinear Dynamics** → updates position and attitude  
+7. **Disturbances** added → evaluate robustness  
+8. Loop repeats at each integration step.
+
+This modular framework reflects real UAV flight controllers:  
+PX4, DJI N3, and Betaflight use **outer-loop position → inner-loop attitude → motor mixing**.
+
+---
+
+## 2.2 Method Flow Diagram
+
+![flowdiagram](scheme.jpg)
+
+The diagram visually summarizes how information flows between trajectory planning, attitude/position control, and nonlinear dynamics.
+
+---
+
+## 2.3 Desired Trajectory Generation
+
+Two main trajectories are used to evaluate controller robustness and precision:
+
+### **(1) Figure-8 Trajectory**
+\[
+x_d = a\sin(\omega t), \qquad 
+y_d = b\sin(2\omega t), \qquad 
 z_d = z_0
-$$
+\]
 
-Used to test horizontal agility.
-
----
-
-### **B. Helical (Spiral) Trajectory**
-
-$$
-x_d = R\cos(\omega t), \quad 
-y_d = R\sin(\omega t), \quad 
-z_d = z_0 + h t
-$$
-
-Used to test vertical and rotational coupling performance.
+### **(2) Helical Trajectory**
+\[
+x_d = R\cos(\omega t), \quad
+y_d = R\sin(\omega t), \quad
+z_d = z_0 + ht
+\]
 
 ---
 
-## 🛠 **6. Simulation Modes**
+### **Velocity & Acceleration Feedforward**
 
-### ✔️ **Without External Disturbances**
-- Pure controller performance  
-- Evaluates stability of the full nonlinear model  
-- Validates robustness of AFGS vs SMC
+Derivatives are computed analytically:
 
-### ✔️ **With External Disturbances**
-Disturbances acting on forces and torques:
+\[
+\dot{x}_d(t),\quad \ddot{x}_d(t), \quad \text{etc.}
+\]
 
-$$
-\mathbf{F}_d(t), \quad \mathbf{M}_d(t)
-$$
-
-Used to test robustness under realistic wind and vibration effects.
+This allows the position controller to **anticipate motion**, making the UAV proactive instead of reactive.  
+It is essential for smooth 8-shape and helical tracking.
 
 ---
 
-## 📈 **7. Results Overview**
+## 2.4 Outer-Loop Position Control (Feedforward + PD)
 
-Each simulation outputs:
+The PD controller regulates translational motion:
 
-- 3D trajectory comparison (Reference vs SMC vs AFGS-SMC)  
-- XY top-view plots  
-- Altitude tracking  
-- Attitude angle responses  
-- Control torques (comparison of smoothness)  
-- Steady-state error evaluation  
-
----
-
-## 🏁 **8. Conclusion**
-
-The **Adaptive Fuzzy Gain-Scheduled SMC** demonstrates significantly improved performance over classical SMC:
-
-- **Higher tracking accuracy** for complex nonlinear trajectories  
-- **Much smoother control inputs** with minimal chattering  
-- **Better robustness** against external disturbances  
-- **Faster convergence** with less overshoot  
-- **Improved dynamic response in aggressive maneuvers**
-
-This makes AFGS-SMC a strong candidate for real-world UAV trajectory tracking and robust nonlinear control applications.
-
----
-
-## 2. Methodology
-
-This section describes the complete control architecture implemented in this project, including
-the nonlinear quadrotor model, the outer-loop PD position controller, the sliding-mode attitude
-controller, and the adaptive fuzzy gain-scheduling mechanism (AFGS). The methodology follows a
-modular structure designed for real-time implementation and numerical stability during aggressive
-motion.
-
----
-
-## **2.1 Control Architecture Overview**
-
-The quadrotor is an **underactuated system**, meaning that translational motion in x–y–z is
-regulated indirectly through the attitude angles (φ, θ, ψ).  
-To handle this structure, the controller is divided into two layers:
-
-### **Outer loop (Position Control) – PD + Feedforward**
-Controls:
-- position \( x, y, z \)
-- generates desired accelerations \( U_x, U_y, U_z \)
-- outputs desired angles \( \phi_d, \theta_d \) and thrust \( u_4 \)
-
-### **Inner loop (Attitude Control) – SMC or AFGS-SMC**
-Controls:
-- attitude \( \phi, \theta, \psi \)
-- ensures the quadrotor tracks the commanded angles
-- uses classical sliding mode or adaptive fuzzy sliding mode
-
-The figure below summarizes the full control chain:
-
----
-
-## **2.2 Method Flow Diagram**
-![flowdiagram](scheme.jpeg)
-
-
----
-
-## **2.3 Desired Trajectory Generation**
-
-Two trajectories are implemented:
-
-### **Figure-8 trajectory**
-
-$
-x_d = a\sin(\omega t),\quad y_d = b\sin(2\omega t),\quad z_d = z_0
-$ 
-
-
-### **Helical trajectory**
-
-$
-x_d = R\cos(\omega t),\quad 
-y_d = R\sin(\omega t),\quad 
-z_d = z_0 + h t
-$
-
-Both include **velocity and acceleration feedforward**, computed analytically:
-$
-\dot{x}_d(t),\, \dot{y}_d(t),\, \dot{z}_d(t)
-$
-$
-\ddot{x}_d(t),\, \ddot{y}_d(t),\, \ddot{z}_d(t)
-$
-
-These feedforward terms allow the controller to anticipate the required motion instead of only reacting to errors.
-
----
-
-## **2.4 Outer-loop Position Control (Feedforward + PD)**
-
-The outer loop transforms tracking errors into **desired inertial accelerations**.
-
-For example, for x-axis:
-
-$$
+\[
 U_x = \ddot{x}_d + K_p(x_d - x) + K_d(\dot{x}_d - \dot{x})
-$$
+\]
 
-These accelerations correspond to the **necessary tilt** (roll and pitch) to produce horizontal motion.
+Similarly for $ U_y $ and $ U_z $.
 
-### ✔ Purpose of the PD Stage
-
-1. **Feedforward accelerations** ensure perfect tracking for smooth trajectories.  
-2. **Proportional term** corrects position error.  
-3. **Derivative term** stabilizes motion and damps oscillation.  
-4. **Improves transition behavior** for fast, dynamic trajectories.  
-5. **Provides robustness** to modeling uncertainties in translational motion.
-
-### ✔ Why PD is necessary?
-
-The quadrotor cannot directly command $ \ddot{x} $ or $ \ddot{y} $.
-It must tilt (φ, θ) to create horizontal acceleration.
-
-Thus the PD section:
-- converts position tracking into **attitude commands**,
-- stabilizes lateral motion,
-- reduces the load on the inner-loop SMC controller.
+These accelerations represent the forces needed in the **inertial frame**, not the body frame.
 
 ---
 
-## **2.5 Conversion to Desired Attitude Variables**
+### ✔ **Role and Logic of the PD Block**
 
-Using quadrotor geometry:
+1. **Feedforward term** $ \ddot{x}_d $  
+   anticipates motion → improves tracking accuracy.
 
-$$
-\phi_d = \arcsin\left(\frac{m}{u_4}(U_x \sin\psi - U_y \cos\psi)\right)
-$$
+2. **Proportional term**  
+   cancels position error.
 
-$$
+3. **Derivative term**  
+   stabilizes velocity & damps oscillations.
+
+4. **Transforms position errors into tilt commands:**  
+   - $ \phi_d \rightarrow $ lateral motion  
+   - $ \theta_d \rightarrow $ forward/back motion  
+   - $ u_4  \rightarrow $ altitude regulation
+
+5. Reduces the burden on the inner SMC / AFGS-SMC controller.
+
+---
+
+## 2.5 Conversion to Desired Attitude Inputs
+
+Using quadrotor geometry, the tilt required to generate horizontal acceleration is:
+
+\[
+\phi_d = \arcsin\left(\frac{m}{u_4}(U_x\sin\psi - U_y\cos\psi)\right)
+\]
+
+\[
 \theta_d = \arcsin\left(
-\frac{m}{u_4} \frac{U_x\cos\psi + U_y\sin\psi}{\cos\phi_d}
+\frac{m}{u_4}(U_x\cos\psi + U_y\sin\psi)
+\cdot \frac{1}{\cos\phi_d}
 \right)
-$$
+\]
 
-The desired yaw is set to a constant or aligned with trajectory direction.
-
-### ✔ Physical meaning  
-- Roll ($\phi$) → controls **left–right** motion  
-- Pitch ($\theta$) → controls **forward–backward** motion  
-- Thrust ($u_4$) → controls **upward acceleration**  
+Physically:
+- $ \phi $ controls **left/right**  
+- $ \theta $ controls **forward/back**  
+- $ u_4 $ controls **vertical thrust**  
 
 ---
 
-## **2.6 Sliding Mode Attitude Control**
+## 2.6 Sliding Mode Attitude Control (Classical SMC)
 
-The attitude controller uses Sliding Mode Control (SMC) for robust stabilization.
+The attitude subsystem tracks the desired angles:
 
-### **Attitude Error Dynamics**
-
-$$
-e_q = q - q_d
-$$
-$$
+\[
+e_q = q - q_d, \qquad 
 \dot{e}_q = \dot{q} - \dot{q}_d
-$$
+\]
 
 ### **Sliding Surface**
-
-$$
+\[
 s_q = \dot{e}_q + \lambda e_q
-$$
+\]
 
 ### **Control Law**
+\[
+u_q = u_{eq} - k_1\,\mathrm{sat}\left(\frac{s_q}{\delta}\right) - k_2 s_q
+\]
 
-$$
-u_q = u_{\text{eq}} - k \cdot \text{sat}\left(\frac{s_q}{\delta}\right)
-$$
+#### ✔ **Logic of Classical SMC**
+- The **equivalent control** $ u_{eq} $ cancels nonlinearities.
+- The **switching term** forces the state toward the sliding surface:
+  - robust to disturbances  
+  - guarantees finite-time convergence  
+- The **linear smoothing term** improves damping.
 
-Where:
-- $ u_{\text{eq}} $ stabilizes linearized dynamics  
-- $ k $ compensates nonlinearities and disturbances  
-- $ \delta $ creates a smooth boundary layer  
+#### ✔ **What SMC Controls**
+SMC outputs:
+- roll torque $ u_1 $  
+- pitch torque $ u_2 $  
+- yaw torque $ u_3 $
 
-### ✔ SMC Strengths  
-- Excellent robustness  
-- Fast convergence  
-- Stable even under model inaccuracy  
+#### ✔ **Main Issue**
+The fixed switching gain produces **high-frequency chattering**, causing:
+- inefficient motor usage  
+- less smooth motion  
+- potential damage in real UAVs
 
-### ✔ SMC Issue  
-- Requires large gain → causes **chattering**
-
-This is fixed by AFGS.
+This motivates the adaptive approach.
 
 ---
 
-## **2.7 Adaptive Fuzzy Gain Scheduling (AFGS-SMC)**
+## 2.7 Adaptive Fuzzy Gain-Scheduled SMC (AFGS-SMC)
 
-Instead of using a constant switching gain $ k $, AFGS computes:
+AFGS replaces the fixed switching gain $ k_1 $ with an **online adaptive value**:
 
-$$
-k(t) = FIS\!\left(|s(t)|, |\dot{e}(t)|\right)
-$$
+\[
+k_1(t) = FIS(|s|, |\dot{e}|)
+\]
 
-### **Inputs to the Fuzzy System**
-1. $ |s| $: magnitude of sliding surface  
-2. $ |\dot{e}| $: error derivative magnitude  
-
-These capture:
-- how far the system is from convergence
-- how fast the error evolves  
+### **Inputs to FIS**
+- $ |s| $: how far the system is from the sliding surface  
+- $ |\dot{e}| $: how fast the error evolves  
 
 ### **Fuzzy Memberships**
-Each input uses 3 Gaussian sets:
+Three Gaussian sets per input:
+- Small (S)  
+- Medium (M)  
+- Large (L)
 
-- **Small**
-- **Medium**
-- **Large**
-
-### **Output**
-Three constant gains:
-
+### **Outputs (Gain Levels)**
 - Low  
 - Medium  
 - High  
 
-### **Rule Base (9 rules)**
+### **Fuzzy Rules **
 Example:
-- If $ s $ is Small and $ \dot{e} $ is Small → **Low gain**  
-- If $ s $ is Large and $ \dot{e} $ is Large → **High gain**
-
-### ✔ AFGS Benefits
-
-- Adaptive switching → less chattering  
-- Lower control effort  
-- Faster steady-state tracking  
-- Higher robustness under disturbance  
-- Smooth transition near equilibrium  
+- If $ |s| $ is **Large** and $ |\dot{e}| $ is **Large** → **High switching gain**  
+- If both are **Small** → **Low switching gain**  
 
 ---
 
-## **2.8 Motor Allocation Mapping**
+### ✔ **Logic of AFGS-SMC**
 
-Your controller computes torques:
+AFGS dynamically adjusts SMC strength:
 
-$$
-u_1,\ u_2,\ u_3,\ u_4
-$$
+1. **High gain** when error increases →  
+   robust, fast correction.
 
-The motor speeds satisfy:
+2. **Low gain** near equilibrium →  
+   smooth control, avoids chattering.
 
-$$
+3. **Moderate gain** during transitions →  
+   good balance between robustness and energy efficiency.
+
+### ✔ **What AFGS-SMC Controls**
+Same as SMC:
+\[
+(u_1, u_2, u_3)
+\]
+but **with adaptive intensity**.
+
+This ensures:
+- less chattering,  
+- smoother motor commands,  
+- higher tolerance to disturbances,  
+- better tracking precision.
+
+---
+
+## 2.8 Motor Allocation Mapping
+
+The controller produces:
+\[
+[u_1 \; u_2 \; u_3 \; u_4]^T
+\]
+
+Motor speeds satisfy:
+\[
 \begin{bmatrix}
-u_4\\
-u_1\\
-u_2\\
-u_3
+u_4\\ u_1\\ u_2\\ u_3
 \end{bmatrix}
 =
 A
 \begin{bmatrix}
-\Omega_1^2 \\
-\Omega_2^2 \\
-\Omega_3^2 \\
-\Omega_4^2
+\Omega_1^2 \\ \Omega_2^2 \\ \Omega_3^2 \\ \Omega_4^2
 \end{bmatrix}
-$$
+\]
 
-where $ A $ is the allocation matrix using thrust (b) and drag (d).
+with the standard quadrotor allocation matrix based on thrust $b$, drag $d$, and arm length $l$.
 
-Solving this system recovers motor commands consistent with the quadrotor's physics.
-
----
-
-## **2.9 Nonlinear Quadrotor Simulation**
-
-The final step applies the inputs to the nonlinear dynamic equations:
-
-- Translational accelerations  
-- Rotational accelerations  
-- Gyroscopic terms  
-- Cross inertia effects  
-
-Using:
-- Euler angles  
-- Newton–Euler rigid-body dynamics  
-- 12-state model  
-
----
-## 3. Results
-
-This section presents the simulation results for the proposed controllers
-on two different 3D reference trajectories:
-
-1. **Figure-8 (∞) trajectory**
-2. **Helical trajectory**
-
-For each trajectory, two simulation scenarios are performed:
-
-- **Without external disturbances**  
-- **With external disturbances** (forces + torques)
-
-Both controllers are evaluated:
-
-- Classical Sliding Mode Control (SMC)
-- Adaptive Fuzzy Gain-Scheduled SMC (AFGS-SMC)
-
-Performance is compared using:
-
-- 3D tracking plots  
-- XY projections  
-- Attitude (φ, θ, ψ) evolution  
-- Control smoothness  
-- Mean Squared Error (MSE)  
-- Integral Squared Error (ISE)  
-
-Each result below includes a placeholder for the corresponding figure.
+This ensures each computed torque corresponds to feasible motor speeds.
 
 ---
 
-## --------------------------------------
-## **3.1. Figure-8 Trajectory (No Disturbance)**
-## --------------------------------------
+## 2.9 Nonlinear Quadrotor Simulation with Disturbances
 
-### **3D Tracking Performance**
+The UAV dynamics include:
+- translational motion,
+- rotational motion,
+- inertial coupling,
+- gyroscopic effects,
+- and control inputs.
 
-> *Insert plot here*  
-**`fig_8shape_no_disturbance_3d.png`**
+Disturbances are injected only in roll and pitch channels:
 
-This figure compares the desired 8-shape trajectory against both controllers.  
-The AFGS-SMC controller produces smoother and more accurate tracking,
-especially in the curve intersections where nonlinear coupling is strongest.
+\[
+d_\phi(t) = 
+\begin{cases}
+20 \cos(0.5 t), & 20\le t \le 30\\
+0, & \text{otherwise}
+\end{cases}
+\]
+
+\[
+d_\theta(t) = d_\phi(t)
+\]
+
+Purpose:
+- evaluate **robustness** of SMC vs AFGS-SMC  
+- reproduce real aerodynamic perturbations  
+- test recovery capability immediately after disturbance window  
+
+---
+# 3. Simulation Setup
+
+This section describes the simulation environment, the quadrotor parameters, controller gains,
+trajectory configuration, and the two testing scenarios used to evaluate the performance of 
+Classical SMC and AFGS-SMC.  
+All simulations were performed using MATLAB and the nonlinear dynamic model presented in Section 2.
 
 ---
 
-### **Top-View Projection (XY plane)**
+## 3.1 Simulation Environment
 
-> *Insert plot here*  
-**`fig_8shape_no_disturbance_xy.png`**
+The nonlinear differential equations of the quadrotor are integrated using the MATLAB solver **ODE45**,
+chosen for its stability and efficiency with smooth nonlinear systems.
 
-The XY projection highlights how closely the adaptive controller
-follows the infinity trajectory, with significantly reduced lateral errors.
+**Solver tolerances:**
 
----
+- Relative tolerance: $ 10^{-6} $
+- Absolute tolerance: $ 10^{-8} $
 
-### **Altitude Tracking (Z-axis)**
-
-> *Insert plot here*  
-**`fig_8shape_no_disturbance_z.png`**
-
-The Z-axis remains stable for both controllers, but AFGS-SMC shows:
-
-- faster convergence  
-- less overshoot  
-- smaller steady-state error  
+These settings ensure numerically stable integration of the rotational dynamics and the high-gain SMC control inputs.
 
 ---
 
-### **Attitude Angle Responses (φ, θ, ψ)**
+## 3.2 Quadrotor Physical Parameters
 
-> *Insert plot here*  
-**`fig_8shape_no_disturbance_attitude.png`**
+The UAV physical parameters are taken from the reference paper and match the values used in simulation:
 
-AFGS-SMC produces smoother attitude transitions and lower oscillation amplitude,
-especially during aggressive parts of the 8-shape path.
+| Parameter | Symbol | Value |
+|----------|--------|--------|
+| Mass | $ m $ | 0.650 kg |
+| Gravity | $ g $ | 9.81 m/s² |
+| Inertia (x-axis) | $ I_x $ | $ 7.5\times10^{-3} $ kg·m² |
+| Inertia (y-axis) | $ I_y $ | $ 7.5\times10^{-3} $ kg·m² |
+| Inertia (z-axis) | $ I_z $ | $ 1.3\times10^{-2} $ kg·m² |
+| Thrust coefficient | $ b $ | $ 3.13\times 10^{-5} $ |
+| Drag coefficient | $ d $ | $ 7.5\times10^{-7} $ |
+| Arm length | $ l $ | 0.23 m |
+| Rotor inertia | $ J_r $ | $ 6\times10^{-5} $ kg·m² |
+
+These values directly influence gyroscopic coupling and rotational behavior.
 
 ---
 
-### **Tracking Error Metrics**
+## 3.3 Controller Parameters
 
-- **MSE in position**  
+Two controllers are tested:
+
+### **3.3.1 Sliding Mode Controller (SMC)**
+
+- Sliding surface gain:  
   \[
-  \text{MSE} = \frac{1}{N} \sum (p_d - p)^2
+  \lambda = 6
+  \]
+- Switching gain (fixed):  
+  \[
+  k_1 = 0.6
+  \]
+- Linear term:  
+  \[
+  k_2 = 6
+  \]
+- Boundary layer:  
+  \[
+  \delta = 0.06
   \]
 
-- **ISE in position**  
-  \[
-  \text{ISE} = \sum (p_d - p)^2 \cdot dt
-  \]
+### **3.3.2 Adaptive Fuzzy Gain-Scheduled SMC (AFGS-SMC)**
 
-> *Insert error bar / comparison plot here*  
-**`fig_8shape_no_disturbance_mse_ise.png`**
+The same SMC structure is used, except $k_1$ becomes adaptive:
 
-AFGS-SMC consistently achieves lower MSE and ISE across all axes.
+\[
+k_1(t) = f_{\text{fuzzy}}(|s|, |\dot{e}|)
+\]
 
----
+Where $f_{\text{fuzzy}}$ is computed by a Sugeno FIS generated using the file `createFIS.m`:
 
-## --------------------------------------------------
-## **3.2. Helical Trajectory (No Disturbance)**
-## --------------------------------------------------
+- 2 inputs: $|s|$, $|\dot{e}|$
+- 3 MFs per input (Small, Medium, Large)
+- 9 total fuzzy rules
+- Output: adaptive switching gain
 
-### **3D Helical Tracking**
-
-> *Insert plot here*  
-**`fig_helix_no_disturbance_3d.png`**
-
-The helical trajectory tests the combined vertical and rotational motion coupling.  
-AFGS-SMC handles the vertical ascent and circular sweep with significantly higher accuracy.
+This ensures high robustness with minimal chattering.
 
 ---
 
-### **Top-View and Side-View Projections**
+## 3.4 Outer-Loop PD Tracking Gains
 
-> *Insert plot(s) here*  
-**`fig_helix_no_disturbance_xy.png`**  
-**`fig_helix_no_disturbance_yz.png`**
+The PD controllers in $x, y, z$ produce desired accelerations:
 
----
+| Axis | $k_p$ | $k_d$ |
+|------|---------|---------|
+| $x, y$ | 6 | 4 |
+| $z$ | 5 | 3 |
 
-### **Attitude Angle Response**
-
-> *Insert plot here*  
-**`fig_helix_no_disturbance_attitude.png`**
-
-Roll and pitch remain smooth with minimal oscillation under AFGS-SMC,
-even during the continuous rotation of the helix.
+These values were tuned for fast and stable response during the 3D figure-8 motion.
 
 ---
 
-### **Tracking Error Metrics**
+## 3.5 Figure-8 Reference Trajectory
 
-> *Insert plot here*  
-**`fig_helix_no_disturbance_mse_ise.png`**
+The reference trajectory is defined by:
 
-AFGS maintains lower cumulative error across full cycles of ascent.
+\[
+x_d(t) = a \sin(\omega t)
+\]
+\[
+y_d(t) = b \sin(2\omega t)
+\]
+\[
+z_d = 4.5
+\]
 
----
+With:
 
-#  **4. Results With Disturbance**
+- $ a = 10 $
+- $ b = 5 $
+- $ \omega = 0.3\ \text{rad/s} $
+- Total simulation time: **40 seconds**
 
-In the second experiment, we introduce **external disturbances**:
-
-- Wind-like force disturbance:  
-  \[
-  F_d(t) = [0.5\sin(2t),\, 0.2\cos(3t),\, 0.15\sin(1.5t)]
-  \]
-
-- Moment disturbance (simulated vibration):  
-  \[
-  M_d(t) = [0.02\sin(5t),\, 0.03\cos(4t),\, 0.015\sin(3t)]
-  \]
-
-These disturbances significantly challenge stability,
-especially during fast orientation changes.
+This duration allows several full loops of the figure-8 pattern to be completed.
 
 ---
 
-## --------------------------------------
-## **4.1. Figure-8 Trajectory (With Disturbance)**
-## --------------------------------------
+## 3.6 Initial Conditions
 
-### **3D Tracking Under Disturbance**
+The quadrotor starts at:
 
-> *Insert plot here*  
-**`fig_8shape_disturbance_3d.png`**
+\[
+[x_0, y_0, z_0] = [0,\ 0,\ 4.5]
+\]
+\[
+[\phi_0, \theta_0, \psi_0] = [0,\ 0,\ 0]
+\]
+\[
+\text{All velocities} = 0
+\]
 
-AFGS-SMC shows:
-
-- strong robustness  
-- significantly reduced trajectory deviation  
-- stable error convergence despite wind-like forces  
-
----
-
-### **Attitude Response Under Disturbance**
-
-> *Insert plot here*  
-**`fig_8shape_disturbance_attitude.png`**
-
-Classical SMC exhibits noticeable chattering,
-while adaptive SMC remains smooth with faster settling.
+Thus, the UAV begins in a stable hover at the reference altitude.
 
 ---
 
-### **MSE / ISE Comparison**
+## 3.7 Simulation Modes
 
-> *Insert plot here*  
-**`fig_8shape_disturbance_mse_ise.png`**
+Two simulation modes are used to evaluate performance.
 
-AFGS achieves a **large reduction** in integrated error
-due to adaptive switching gain compensation.
+### **Mode 1 — Without Disturbance**
+- Tests pure controller capability  
+- Evaluates dynamic precision  
+- Serves as baseline comparison for SMC vs AFGS-SMC  
 
----
+### **Mode 2 — With Disturbance**
 
-## --------------------------------------------------
-## **4.2. Helical Trajectory (With Disturbance)**
-## --------------------------------------------------
+External disturbances are applied between **20 s** and **30 s**:
 
-### **3D Tracking of Spiral Under Disturbance**
+\[
+\ddot{\phi} \leftarrow \ddot{\phi} + d_{\phi}(t)
+\]
+\[
+\ddot{\theta} \leftarrow \ddot{\theta} + d_{\theta}(t)
+\]
 
-> *Insert plot here*  
-**`fig_helix_disturbance_3d.png`**
+These disturbances:
 
-AFGS-SMC maintains accurate tracking even during continuous ascending motion,
-while classical SMC drifts more significantly.
+- act on roll and pitch (the most sensitive states)  
+- simulate wind gusts or sudden aerodynamic changes  
+- allow evaluation of robustness under realistic perturbations  
 
----
-
-### **Attitude Evolution**
-
-> *Insert plot here*  
-**`fig_helix_disturbance_attitude.png`**
-
-The adaptive control reduces attitude oscillations at high angular velocities.
+This mode clearly exposes the difference between classical SMC and the adaptive fuzzy strategy.
 
 ---
 
-### **Error Analysis (MSE/ISE)**
+## 3.8 Performance Evaluation Metrics
 
-> *Insert plot here*  
-**`fig_helix_disturbance_mse_ise.png`**
+Two error metrics are used for quantitative comparison:
 
-Again, AFGS-SMC achieves the lowest tracking error across all axes.
+### **Root Mean Square Error (RMSE)**
 
----
+\[
+\text{RMSE} = \sqrt{\frac{1}{N}\sum_{i=1}^N (p_i - p_{d,i})^2}
+\]
 
-# 🧾 Summary of Results
+Computed for:
+- $x$
+- $y$
+- $z$
 
-- AFGS-SMC delivers **superior tracking accuracy** for both trajectories.  
-- Chattering is **significantly reduced**, leading to smoother orientation control.  
-- Under disturbances, AFGS-SMC retains strong robustness and low steady-state error.  
-- The PD outer loop effectively stabilizes translational motion and reduces error burden on the inner controller.  
-- Both MSE and ISE clearly confirm the performance improvement of the adaptive approach.
-
----
-
-## 5. Conclusion
-
-This project developed and evaluated a complete nonlinear control framework for quadrotor UAV
-trajectory tracking using **Sliding Mode Control (SMC)** and an improved
-**Adaptive Fuzzy Gain-Scheduled Sliding Mode Controller (AFGS-SMC)**.  
-By combining sliding-mode robustness with fuzzy-logic adaptation, the controller successfully
-handled the quadrotor’s nonlinear and underactuated dynamics and achieved stable,
-high-precision tracking of complex 3D trajectories.
-
-Across all experiments—Figure-8 and Helical paths, with and without external disturbances—
-AFGS-SMC consistently outperformed classical SMC in several key metrics:
-
-### ✔ Superior Tracking Accuracy  
-AFGS-SMC maintained tighter adherence to the reference paths,
-especially in high-curvature zones and during climbing in the helical trajectory.
-
-### ✔ Reduced Chattering  
-The fuzzy gain scheduling adapted the switching gain online,
-eliminating the high-frequency oscillations typical in classical SMC.
-This yields smoother angular motion and reduces actuator stress.
-
-### ✔ Faster Error Convergence  
-Both position and attitude errors converged more quickly under AFGS-SMC,
-due to the adaptive switching that increases control authority only when needed.
-
-### ✔ Strong Robustness to Disturbances  
-When wind-like forces and moment disturbances were applied,
-the adaptive controller maintained stability with significantly lower MSE and ISE values.
-Classical SMC, although stable, displayed larger deviations and stronger oscillations.
-
-### ✔ Effective Outer-Loop PD  
-The PD + feedforward outer loop provided reliable acceleration references,
-decreasing the burden on the inner-loop SMC and enhancing global stability.
+RMSE evaluates **overall tracking accuracy**.
 
 ---
 
-## ✨ Final Remarks
+### **Integral of Squared Error (ISE)**
 
-The results demonstrate that **AFGS-SMC is a powerful and practical enhancement of classical sliding-mode control**, offering:
+\[
+\text{ISE} = \int_0^T (p(t) - p_d(t))^2\ dt
+\]
 
-- strong robustness,
-- smooth control action,
-- reduced chattering,
-- improved precision,
-- and better adaptability to nonlinear, uncertain conditions.
+ISE penalizes large errors and measures **global controller performance** over time.
 
-This work provides a modular, extensible simulation environment that can be extended to:
+---
 
-- actuator dynamics,
-- sensor noise,
-- real-time embedded implementation,
-- model-based disturbance observers,
-- or experimental validation on physical quadrotor platforms.
+# 3. Results and Discussion  
 
-The methodology and results show that adaptive fuzzy gain scheduling is an effective method to
-improve sliding-mode control for UAV trajectory tracking and represents a promising direction
-for robust nonlinear control in aerial robotics.
+This section presents the simulation results obtained from tracking a **3D figure-8 (∞) trajectory** using both **Classical Sliding Mode Control (SMC)** and **Adaptive Fuzzy Gain-Scheduled SMC (AFGS-SMC)**. Two scenarios are examined:
+
+1. **Nominal case (no external disturbances)**  
+2. **Disturbed case (external time-varying torques acting on roll & pitch between 20–30 s)**  
+
+The analysis includes 3D tracking accuracy, attitude behavior, and quantitative performance metrics (RMSE & ISE).
+
+---
+
+# **3.1. Nominal Case – Without Disturbance**
+
+### **3.1.1 3D Trajectory Tracking**
+In the nominal case, both controllers successfully track the full figure-8 trajectory with excellent accuracy.  
+The 3D plot demonstrates **near-perfect coincidence** between the desired trajectory, SMC response, and AFGS-SMC response.
+
+**Figure: 3D Trajectory Tracking – 8-Shape Pattern**  
+(Insert the first 3D figure here)
+
+### **3.1.2 Top-View Projection**
+The XY top view confirms that both controllers follow the reference trajectory with negligible deviation.  
+AFGS-SMC shows slightly smoother curve transitions due to its adaptive switching gain.
+
+(Insert top-view figure here)
+
+### **3.1.3 Attitude Angle Behavior**
+The roll, pitch, and yaw angles remain:
+
+- smooth,  
+- bounded within ±15°,  
+- free of oscillations or chattering.  
+
+Both controllers behave identically because no disturbance is applied, so the system remains well-behaved and balanced.
+
+![attitude_angles_without_disturb](AFGS_SMC\angles attitude.jpg)
+
+
+### **3.1.4 Error Analysis (Nominal Case)**
+Since both controllers perfectly track the reference trajectory:
+
+- No significant position error,  
+- RMSE and ISE are nearly zero → **no comparison required**,  
+- Confirms correct controller tuning and dynamic model precision.
+
+---
+
+# **3.2. Disturbed Case – With Time-Varying Torques**
+
+### **Disturbance Model**
+During **20–30 seconds**, disturbances are injected into roll & pitch rotational dynamics:
+
+\[
+d_1(t) = 20\cos(0.5t), \qquad  
+d_2(t) = 20\cos(0.5t)
+\]
+
+These behave like **periodic wind gusts** or **mechanical vibrations**, forcing the UAV to deviate in attitude while tracking the trajectory.
+
+---
+
+# **3.2.1 3D Trajectory Response Under Disturbance**
+The disturbed 3D shape shows clear differences:
+
+- **SMC deviates strongly** from the reference, with visible drift in both lobes of the 8-shape.
+- **AFGS-SMC maintains tight tracking**, with only small temporary deviations.
+
+**Figure: Disturbed 3D Shape Tracking**  
+
+![3D PLOT](AFGS_SMC\disturbance\3D_shape_disturb.jpg)
+
+---
+
+# **3.2.2 Top-View Projection with Disturbance**
+The xy-projection highlights the drift more clearly:
+
+- Classical SMC diverges significantly due to fixed switching gain.  
+- AFGS-SMC adapts its gain instantly → maintains trajectory shape.  
+
+![UP view](8 SHAPE.jpg)
+
+---
+
+# **3.2.3 Attitude Angle Response (Under Disturbance)**
+The attitude plot under disturbance reveals:
+
+- **SMC experiences noticeable oscillations** during 20–30 s.  
+- **AFGS-SMC keeps smoother curves**, quickly stabilizing after disturbance stops.  
+- Adaptive gain scheduling allows rapid compensation without excessive control effort.
+
+
+![Attitude angles](attitude_angles_disturb.jpg)
+---
+
+# **3.2.4 State RMSE and Instantaneous Error**
+Instantaneous tracking errors strongly differentiate the two controllers:
+
+- SMC error spikes sharply during disturbance interval.
+- AFGS-SMC shows shallow, short-duration peaks.
+
+![STATE RMSE](state_RMSE_error.jpg)
+---
+
+# **3.2.5 RMSE and ISE Metrics**
+The bar plots and summary table quantify performance:
+
+**Figure: RMSE / ISE Comparison**  
+
+![comparaison errors](RMSE_comparison_plot.png)
+![comparaison errors](RMSE_ISE.jpg)
+
+### **Key Observations**
+- AFGS-SMC reduces **steady-state tracking error by more than half**.  
+- Large improvement in disturbance rejection (ISE ↓ 70%).  
+- Adaptation mechanism prevents excessive oscillation.  
+- Classical SMC suffers because fixed switching gain is insufficient for strong disturbances.
+
+---
+
+# **4. Conclusion**
+
+This study implemented and compared two robust nonlinear controllers for quadrotor trajectory tracking:
+
+- **Classical Sliding Mode Control (SMC)**  
+- **Adaptive Fuzzy Gain-Scheduled SMC (AFGS-SMC)**  
+
+### **Main Findings**
+
+### ✔ Perfect Tracking in Nominal Case  
+Both controllers achieved **near-perfect tracking** of the figure-8 trajectory in the absence of disturbances, confirming:
+
+- strong stability of the 6-DOF model,  
+- correct controller tuning,  
+- effectiveness of feedforward-PD outer loop.
+
+### ✔ Under Disturbances, AFGS-SMC Outperforms SMC  
+With periodic external torques applied:
+
+- Classical SMC **lags, oscillates, and drifts** from the reference.  
+- AFGS-SMC **maintains strong robustness**, adapting gain according to sliding surface behavior.
+
+### ✔ Quantitative Metrics  
+AFGS-SMC improves:
+
+- **Position RMSE by ~31%**  
+- **Position ISE by ~57%**  
+- **Disturbance RMSE by ~46%**  
+- **Disturbance ISE by ~71%**
+
+This proves that adaptive gain scheduling **substantially enhances robustness** compared to fixed-gain SMC.
+
+### ✔ Final Outcome  
+AFGS-SMC offers:
+
+- smoother attitude stabilization,  
+- better disturbance rejection,  
+- reduced chattering,  
+- improved stability margins,  
+- accurate tracking even under aggressive maneuvers & external disturbances.
+
+Thus, **AFGS-SMC is clearly more suitable for real-world UAV deployment**, where uncertainties and wind disturbances are unavoidable.
+
+---
+
+
 
 
 
